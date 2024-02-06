@@ -1,5 +1,7 @@
-#define ANTENNA 2 
-#define CARD_ID 0x0001020304
+#define ANTENNA 25 //ANTENNA PIN
+#define CARD_ID 0x0001020304 //Card ID to emulate
+
+hw_timer_t * timer = NULL;
 
 volatile int bit_counter=0;
 volatile int byte_counter=0;
@@ -27,33 +29,7 @@ void data_card_ul() {
   }
 }
 
-void setupTimer1() {
-  noInterrupts();
-  // Clear registers
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1 = 0;
-
-  // 3906.25 Hz (16000000/((4095+1)*1))
-  OCR1A = 4095;
-  // Prescaler 1
-  TCCR1B |= (1 << CS10);
-  // Output Compare Match A Interrupt Enable
-  TIMSK1 |= (1 << OCIE1A);
-  interrupts();
-}
-
-void setup() {
-  pinMode(ANTENNA, OUTPUT);    
-  data_card_ul();  
-  setupTimer1();
-}
-
-void loop() {
-}
-
-ISR(TIMER1_COMPA_vect) {
-        TCNT1=0;
+void IRAM_ATTR onTimer() {
 	if (((data[byte_counter] << bit_counter)&0x80)==0x00) {
 	    if (half==0) digitalWrite(ANTENNA, LOW);
 	    if (half==1) digitalWrite(ANTENNA, HIGH);
@@ -72,4 +48,20 @@ ISR(TIMER1_COMPA_vect) {
 	        byte_counter=(byte_counter+1)%8;
 		}
 	}
+}
+
+void setupTimer1() {
+  timer = timerBegin(0, 80, true); // Change if using other CPU Frequency (80 = 80000000 Hz / 1000000 us)
+  timerAttachInterrupt(timer, &onTimer, true);
+  timerAlarmWrite(timer, 256, true); // 256 = 1000000 us / 3906,25 Hz
+  timerAlarmEnable(timer);
+}
+
+void setup() {
+  pinMode(ANTENNA, OUTPUT);    
+  data_card_ul();  
+  setupTimer1();
+}
+
+void loop() {
 }
